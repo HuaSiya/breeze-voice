@@ -1,9 +1,9 @@
 {
   "manifest_version": 2,
   "id": "github.husiya.breeze-voice",
-  "version": "1.0.0",
-  "name": "BreezeBlue 按需语音",
-  "description": "用 BreezeBlue 云端 TTS 把模型明确要求语音的回复合成语音条，带字数/每日用量限制与文字回退，不改变人设、记忆和 QQ 连接。",
+  "version": "1.1.0",
+  "name": "BreezeBlue 语音",
+  "description": "用 BreezeBlue 云端 TTS 把模型请求或按概率随机选中的短回复合成语音条，带字数/每日用量限制与文字回退，不改变人设、记忆和 QQ 连接。",
   "author": {
     "name": "HuaSiya",
     "url": "https://github.com/HuaSiya"

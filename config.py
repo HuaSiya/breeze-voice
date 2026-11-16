@@ -6,7 +6,7 @@ from typing import List, Literal
 
 from maibot_sdk import Field, PluginConfigBase
 
-SUPPORTED_CONFIG_VERSION = "1.0.0"
+SUPPORTED_CONFIG_VERSION = "1.1.0"
 DEFAULT_VOICE_ID = "voc_u3nxkd5578wc"
 DEFAULT_VOICE_NAME = "大肥鱼·机灵版"
 DEFAULT_API_BASE_URL = "https://api.breeze.blue"
@@ -99,6 +99,34 @@ class TriggerConfig(PluginConfigBase):
 
     __ui_label__ = "触发与限额"
     __ui_order__ = 2
+
+    mode: Literal["on_demand", "random_llm"] = Field(
+        default="on_demand",
+        description=(
+            "on_demand=只有模型主动调用 breeze_voice_say 才转语音；"
+            "random_llm=按概率随机转语音，同时保留模型主动请求"
+        ),
+    )
+    probability: float = Field(
+        default=0.15,
+        ge=0.0,
+        le=1.0,
+        description="random_llm 模式下每条短回复转语音的概率；0.15 表示约 15%",
+        json_schema_extra={"step": 0.05},
+    )
+    short_reply_max_chars: int = Field(
+        default=60,
+        ge=10,
+        le=200,
+        description="随机触发只作用于不超过该字数的短回复；超过仍发文字",
+    )
+    decision_ttl: float = Field(
+        default=10.0,
+        ge=1.0,
+        le=60.0,
+        description="同一轮回复的随机判定缓存秒数；避免多句回复连发多条语音",
+        json_schema_extra={"step": 1},
+    )
 
     max_text_length: int = Field(
         default=120,

@@ -1,20 +1,25 @@
-# BreezeBlue 按需语音
+# BreezeBlue 语音
 
-给 MaiBot 增加「明确要求时才用语音回复」的 BreezeBlue 云端 TTS 能力。
+给 MaiBot 增加 BreezeBlue 云端 TTS 语音回复能力，支持两种触发方式：
+
+- `on_demand`：只有模型明确要求时调用 `breeze_voice_say` 才转语音；
+- `random_llm`：按概率随机转语音，同时保留模型主动请求（默认 15%）。
+
 不改变聊天模型、人设、记忆、群权限和 QQ 连接方式。
 
 ## 工作方式
 
-1. 模型判断这一轮适合语音时，调用工具 `breeze_voice_say`；
+1. 按 `trigger.mode` 判断这一轮是否发语音：随机命中或模型调用工具；
 2. 宿主准备发送这条回复时，插件把纯文本替换成 BreezeBlue 合成的语音条；
 3. 合成失败、文本过长、超过每日限额或未配置 Key 时，原样发送文字，不重复发送。
 
-只有模型主动调用工具才会触发，不做随机转语音。语音段以 base64 内联交给
-SnowLuma 适配器，不依赖 Bot 容器与 QQ 容器共享文件路径。
+随机模式只作用于不超过 `short_reply_max_chars` 的短回复，并按聊天流缓存判定，
+避免一轮多句回复连发多条语音。语音段以 base64 内联交给 SnowLuma 适配器，
+不依赖 Bot 容器与 QQ 容器共享文件路径。
 
 ## 安装
 
-- 插件市场搜索 **BreezeBlue 按需语音**，或插件 ID `github.husiya.breeze-voice`
+- 插件市场搜索 **BreezeBlue 语音**，或插件 ID `github.husiya.breeze-voice`
 - 手动安装：把仓库目录放到 `MaiBot/plugins/breeze-voice/`，重启 MaiBot
 - 依赖：`aiohttp`（MaiBot 主程序通常已自带）
 
@@ -27,6 +32,10 @@ SnowLuma 适配器，不依赖 Bot 容器与 QQ 容器共享文件路径。
 | `breeze.api_key` | BreezeBlue API Key（`brz_` 开头），密码框输入，不会写入日志 |
 | `breeze.voice_id` | 默认 `voc_u3nxkd5578wc`（大肥鱼·机灵版）；迷糊版为 `voc_8yud7hz7c9q2` |
 | `breeze.instructions` | 语气提示词，可留空 |
+| `trigger.mode` | `on_demand`=仅模型请求；`random_llm`=概率随机 + 模型请求，默认 `random_llm` |
+| `trigger.probability` | 随机模式下每条短回复转语音的概率，默认 `0.15`（15%） |
+| `trigger.short_reply_max_chars` | 随机模式只处理不超过该字数的回复，默认 60 |
+| `trigger.decision_ttl` | 同一轮回复随机判定的缓存秒数，默认 10，避免多句连发语音 |
 | `trigger.max_text_length` | 单条语音最大字数，默认 120；超长保留文字 |
 | `trigger.daily_limit` | 每日语音条数上限，默认 50；`0` 为不限 |
 | `trigger.daily_char_limit` | 每日语音总字数上限，默认 3000；`0` 为不限 |
@@ -50,6 +59,8 @@ SnowLuma 适配器，不依赖 Bot 容器与 QQ 容器共享文件路径。
 - 如果两个适配器都在同一个群里，还会出现重复回复和重复工具名警告。
   不需要官方适配器时，在插件管理页停用它即可；需要保留时不要把它的账号加入
   `allowed_account_ids`。
+- 随机触发按聊天流缓存；如果你希望完全只在明确要求时发语音，把 `trigger.mode`
+  设为 `on_demand`。
 - 不要同时开启 MiMo 语音的随机触发和本插件，否则可能出现一条回复两种声音。
 - BreezeBlue 接口不是 OpenAI TTS 兼容接口：鉴权头为 `xi-api-key`，
   `voice_id` 在 URL 路径中，`output_format` 是查询参数。

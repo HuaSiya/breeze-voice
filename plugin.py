@@ -18,6 +18,7 @@ import copy
 import hashlib
 import json
 import os
+import random
 import time
 from datetime import datetime
 from pathlib import Path
@@ -53,6 +54,7 @@ class BreezeVoicePlugin(MaiBotPlugin):
     def __init__(self) -> None:
         super().__init__()
         self._voice_requests: Dict[str, float] = {}
+        self._random_decisions: Dict[str, tuple[float, bool]] = {}
         self._last_voice_at: Dict[str, float] = {}
         self._warned_at: Dict[str, float] = {}
         self._lock: Optional[asyncio.Lock] = None
@@ -72,6 +74,7 @@ class BreezeVoicePlugin(MaiBotPlugin):
     async def on_unload(self) -> None:
         """插件卸载时清理内存状态。"""
         self._voice_requests.clear()
+        self._random_decisions.clear()
         self._last_voice_at.clear()
 
     async def on_config_update(self, scope: str, config_data: Dict[str, Any], version: str) -> None:
@@ -121,7 +124,7 @@ class BreezeVoicePlugin(MaiBotPlugin):
     @HookHandler(
         "send_service.before_send",
         name="breeze_voice_before_send",
-        description="把模型明确要求语音的纯文本回复替换为 BreezeBlue 语音，失败时按配置回退文字",
+        description="按配置概率或模型请求把纯文本回复替换为 BreezeBlue 语音，失败时按配置回退文字",
         mode=HookMode.BLOCKING,
         order=HookOrder.LATE,
         # 合成超时最长可配到 120s，钩子必须比它更宽；超时后宿主会按文字原样发送。
@@ -133,7 +136,7 @@ class BreezeVoicePlugin(MaiBotPlugin):
         message: Optional[Dict[str, Any]] = None,
         **kwargs: Any,
     ) -> Optional[Dict[str, Any]]:
-        """按需把出站纯文本回复替换成语音段。"""
+        """按配置的触发模式把出站纯文本回复替换成语音段。"""
         cfg = self.config
         if not cfg.plugin.enabled or not isinstance(message, dict):
             return None
@@ -145,7 +148,9 @@ class BreezeVoicePlugin(MaiBotPlugin):
         stream_id = self._stream_id_from_message(outbound, kwargs)
         if not stream_id:
             return None
-        if not self._take_voice_request(stream_id):
+
+        requested = self._take_voice_request(stream_id)
+        if not requested and cfg.trigger.mode != "random_llm":
             return None
 
         # 到这里本次语音许可已被消费：无论后面成功还是回退，都不会再影响下一条回复。
@@ -168,10 +173,15 @@ class BreezeVoicePlugin(MaiBotPlugin):
             return None
 
         cleaned = sanitize_for_tts(text)
+        max_length = (
+            int(cfg.trigger.max_text_length)
+            if requested
+            else int(cfg.trigger.short_reply_max_chars)
+        )
         if cleaned is None or not is_speakable(
             cleaned,
             min_length=int(cfg.trigger.min_text_length),
-            max_length=int(cfg.trigger.max_text_length),
+            max_length=max_length,
         ):
             self.ctx.logger.info(
                 "BreezeBlue 语音跳过：文本不适合合成（原 %d 字，清洗后 %s）",
@@ -187,6 +197,13 @@ class BreezeVoicePlugin(MaiBotPlugin):
         if self._in_cooldown(stream_id):
             self.ctx.logger.info("BreezeBlue 语音跳过：同一聊天流仍在冷却时间内")
             return None
+
+        if not requested and not self._random_voice_allowed(stream_id):
+            self.ctx.logger.debug("BreezeBlue 语音跳过：本轮随机判定为文字")
+            return None
+        # 本轮已经决定发语音（随机命中或模型请求）：抑制同一轮后续句子的随机判定，
+        # 避免一条长回复被拆成多条语音。
+        self._suppress_random_voice(stream_id)
 
         started = time.monotonic()
         try:
@@ -376,6 +393,35 @@ class BreezeVoicePlugin(MaiBotPlugin):
         expires_at = self._voice_requests.pop(stream_id, 0.0)
         return expires_at > time.monotonic()
 
+    def _random_voice_allowed(self, stream_id: str) -> bool:
+        """按聊天流做一次随机判定，并在 decision_ttl 内复用结果。"""
+        now = time.monotonic()
+        entry = self._random_decisions.get(stream_id)
+        if entry is not None and entry[0] >= now:
+            return entry[1]
+        allowed = random.random() < float(self.config.trigger.probability)
+        self._random_decisions[stream_id] = (
+            now + float(self.config.trigger.decision_ttl),
+            allowed,
+        )
+        if len(self._random_decisions) > _TTL_CACHE_MAX_ENTRIES:
+            self._random_decisions = {
+                key: value for key, value in self._random_decisions.items() if value[0] >= now
+            }
+            if len(self._random_decisions) > _TTL_CACHE_MAX_ENTRIES:
+                self._random_decisions.clear()
+        self.ctx.logger.debug(
+            "BreezeBlue 随机语音判定: %s（概率 %.0f%%）",
+            "语音" if allowed else "文字",
+            float(self.config.trigger.probability) * 100,
+        )
+        return allowed
+
+    def _suppress_random_voice(self, stream_id: str) -> None:
+        """本轮已发语音后，抑制同一聊天流后续句子的随机命中。"""
+        ttl = float(self.config.trigger.decision_ttl)
+        self._random_decisions[stream_id] = (time.monotonic() + ttl, False)
+
     def _in_cooldown(self, stream_id: str) -> bool:
         last = self._last_voice_at.get(stream_id, 0.0)
         return last > 0 and (time.monotonic() - last) < float(self.config.trigger.cooldown_sec)
@@ -402,12 +448,18 @@ class BreezeVoicePlugin(MaiBotPlugin):
             self.ctx.logger.info("BreezeBlue 语音已停用（plugin.enabled=false）")
             return
         key_state = "已配置" if self._api_key() else "未配置"
+        mode_desc = (
+            "仅模型请求"
+            if cfg.trigger.mode == "on_demand"
+            else f"随机 {float(cfg.trigger.probability) * 100:.0f}% + 模型请求"
+        )
         self.ctx.logger.info(
-            "BreezeBlue 语音已启用：音色=%s(%s)，API Key=%s，上限=%s 条/%s 字每日，"
-            "仅模型调用 breeze_voice_say 时触发",
+            "BreezeBlue 语音已启用：音色=%s(%s)，API Key=%s，触发=%s，"
+            "上限=%s 条/%s 字每日",
             cfg.breeze.voice_name or "未命名",
             cfg.breeze.voice_id,
             key_state,
+            mode_desc,
             cfg.trigger.daily_limit or "不限",
             cfg.trigger.daily_char_limit or "不限",
         )
