@@ -1,0 +1,31 @@
+[plugin]
+enabled = true
+config_version = "1.0.0"
+
+[breeze]
+api_key = ""
+api_base_url = "https://api.breeze.blue"
+voice_id = "voc_u3nxkd5578wc"
+voice_name = "大肥鱼·机灵版"
+model_id = "breeze-tts-2"
+language_code = "zh"
+output_format = "mp3"
+instructions = "标准普通话，声音清亮、轻软，平时有一点小迷糊；像在 QQ 群里随口聊天一样自然，语速略快，不要拖长尾音。"
+speed = 1.0
+timeout_sec = 30.0
+
+[trigger]
+max_text_length = 120
+min_text_length = 2
+daily_limit = 50
+daily_char_limit = 3000
+cooldown_sec = 5.0
+group_enabled = true
+private_enabled = true
+allowed_group_ids = []
+# 留空表示不限制；QQ 官方适配器不支持 voice 段，建议只填 SnowLuma 的机器人账号
+allowed_account_ids = []
+
+[delivery]
+fallback_to_text = true
+remove_reply = true
