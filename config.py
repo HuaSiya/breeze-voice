@@ -108,10 +108,10 @@ class TriggerConfig(PluginConfigBase):
         ),
     )
     probability: float = Field(
-        default=0.15,
+        default=0.05,
         ge=0.0,
         le=1.0,
-        description="random_llm 模式下每条短回复转语音的概率；0.15 表示约 15%",
+        description="random_llm 模式下每条短回复转语音的概率；0.05 表示约 5%",
         json_schema_extra={"step": 0.05},
     )
     short_reply_max_chars: int = Field(

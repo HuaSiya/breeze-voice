@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.1
+
+- 随机模式默认概率从 0.15 调整为 0.05（5%）。
+- Manifest 适配 MaiBot 1.4.x（Host 最高 1.4.99），SDK 最高支持放宽到 2.98.99。
+
 ## 1.1.0
 
 - 新增 `trigger.mode`：`on_demand`（仅模型请求）与 `random_llm`（概率随机 + 模型请求）。

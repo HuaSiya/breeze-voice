@@ -3,7 +3,7 @@
 给 MaiBot 增加 BreezeBlue 云端 TTS 语音回复能力，支持两种触发方式：
 
 - `on_demand`：只有模型明确要求时调用 `breeze_voice_say` 才转语音；
-- `random_llm`：按概率随机转语音，同时保留模型主动请求（默认 15%）。
+- `random_llm`：按概率随机转语音，同时保留模型主动请求（默认 5%）。
 
 不改变聊天模型、人设、记忆、群权限和 QQ 连接方式。
 
@@ -33,7 +33,7 @@
 | `breeze.voice_id` | 默认 `voc_u3nxkd5578wc`（大肥鱼·机灵版）；迷糊版为 `voc_8yud7hz7c9q2` |
 | `breeze.instructions` | 语气提示词，可留空 |
 | `trigger.mode` | `on_demand`=仅模型请求；`random_llm`=概率随机 + 模型请求，默认 `random_llm` |
-| `trigger.probability` | 随机模式下每条短回复转语音的概率，默认 `0.15`（15%） |
+| `trigger.probability` | 随机模式下每条短回复转语音的概率，默认 `0.05`（5%） |
 | `trigger.short_reply_max_chars` | 随机模式只处理不超过该字数的回复，默认 60 |
 | `trigger.decision_ttl` | 同一轮回复随机判定的缓存秒数，默认 10，避免多句连发语音 |
 | `trigger.max_text_length` | 单条语音最大字数，默认 120；超长保留文字 |

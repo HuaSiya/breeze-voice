@@ -16,7 +16,7 @@ timeout_sec = 30.0
 
 [trigger]
 mode = "random_llm"
-probability = 0.15
+probability = 0.05
 short_reply_max_chars = 60
 decision_ttl = 10.0
 max_text_length = 120
